@@ -13,6 +13,7 @@
 // parse.c
 typedef enum {
     TK_RESERVED,
+    TK_RET,
     TK_IDENT,
     TK_NUM,
     TK_EOF
@@ -27,12 +28,23 @@ struct Token {
 };
 Token *new_token(TokenKind kind, Token *cur, char *str);
 Token *token;
+typedef struct LVar LVar;
+struct LVar {
+    LVar *next;
+    char *name;
+    int len;
+    int offset;
+};
+LVar *locals;
 bool consume(char *op);
 Token *consume_ident();
+bool consume_ret();
 void expect(char *op);
 int expect_number();
 bool at_eof();
 void tokenize();
+LVar *find_lvar(Token *tok);
+int locals_len();
 
 typedef enum {
     ND_ADD, // +
@@ -40,6 +52,7 @@ typedef enum {
     ND_MUL, // *
     ND_DIV, // /
     ND_ASS, // =
+    ND_RET, // return
     ND_LVAR,
     ND_NUM,
 
@@ -61,7 +74,6 @@ struct Node {
 };
 Node *new_node(NodeKind kind, Node *lhs, Node *rhs);
 Node *new_node_num(int val);
-Node *new_node_ident(Token* tok);
 Node *code[100];
 
 void program();
@@ -83,5 +95,7 @@ void gen(Node *node);
 char *user_input;
 void error(char *fmt, ...);
 void error_at(const char *loc, char *fmt, ...);
+void prologue(const int lvals);
+void epilogue();
 
 #endif //INC_9CC_9CC_H

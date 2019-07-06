@@ -23,6 +23,16 @@ void error_at(const char *loc, char *fmt, ...) {
     fprintf(stderr, "\n");
     exit(1);
 }
+void prologue(const int lvals) {
+    printf("  push rbp\n");
+    printf("  mov rbp, rsp\n");
+    printf("  sub rsp, %d\n", lvals);
+}
+void epilogue() {
+    printf("  mov rsp, rbp\n");
+    printf("  pop rbp\n");
+    printf("  ret\n");
+}
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "incorrect number of arguments");
@@ -37,20 +47,12 @@ int main(int argc, char **argv) {
     printf(".global main\n");
     printf("main:\n");
 
-    //prologue
-    printf("  push rbp\n");
-    printf("  mov rbp, rsp\n");
-    printf("  sub rsp, 208\n");
-
+    prologue(locals_len() * 8);
     for (int i = 0; code[i]; i++) {
         gen(code[i]);
         printf("  pop rax\n"); // TODO remove?
     }
-
-    // epilogue
-    printf("  mov rsp, rbp\n");
-    printf("  pop rbp\n");
-    printf("  ret\n");
+    epilogue();
 
     return 0;
 }

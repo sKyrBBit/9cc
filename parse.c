@@ -26,6 +26,13 @@ Token *consume_ident() {
     token = token->next;
     return tok;
 }
+bool consume_ret() {
+    if (token->kind != TK_RET) {
+        return false;
+    }
+    token = token->next;
+    return true;
+}
 void expect(char *op) {
     if (token->kind != TK_RESERVED ||
         strlen(op) != token->len ||
@@ -55,30 +62,43 @@ void tokenize() {
             p++;
             continue;
         }
-        if (!strncmp(p, ">=", 2) ||
-            !strncmp(p, "<=", 2) ||
-            !strncmp(p, "==", 2) ||
-            !strncmp(p, "!=", 2)) {
+        if (strncmp(p, ">=", 2) == 0 ||
+            strncmp(p, "<=", 2) == 0 ||
+            strncmp(p, "==", 2) == 0 ||
+            strncmp(p, "!=", 2) == 0) {
             cur = new_token(TK_RESERVED, cur, p);
             cur->len = 2;
             p += cur->len;
             continue;
         }
-        if (!strncmp(p, "+", 1) ||
-            !strncmp(p, "-", 1) ||
-            !strncmp(p, "*", 1) ||
-            !strncmp(p, "/", 1) ||
-            !strncmp(p, ">", 1) ||
-            !strncmp(p, "<", 1) ||
-            !strncmp(p, "=", 1) ||
-            !strncmp(p, ";", 1)) {
+        if (strncmp(p, "+", 1) == 0 ||
+            strncmp(p, "-", 1) == 0 ||
+            strncmp(p, "*", 1) == 0 ||
+            strncmp(p, "/", 1) == 0 ||
+            strncmp(p, ">", 1) == 0 ||
+            strncmp(p, "<", 1) == 0 ||
+            strncmp(p, "=", 1) == 0 ||
+            strncmp(p, ";", 1) == 0) {
             cur = new_token(TK_RESERVED, cur, p++);
             cur->len = 1;
             continue;
         }
-        if ('a' <= *p && *p <= 'z') { // TODO A-Z _
-            cur = new_token(TK_IDENT, cur, p++);
-            cur->len = 1;
+        if (strncmp(p, "return", 6) == 0 && !(isalnum(p[6]) || p[6] == '_')) {
+            cur = new_token(TK_RET, cur, p);
+            cur->len = 6;
+            p += 6;
+            continue;
+        }
+        if (isalpha(*p)) {
+            int len = 1;
+            char *q = p + 1;
+            while (isalnum(*q) || q[0] == '_') {
+                len++;
+                q++;
+            }
+            cur = new_token(TK_IDENT, cur, p);
+            cur->len = len;
+            p += len;
             continue;
         }
         if (isdigit(*p)) {
@@ -92,6 +112,19 @@ void tokenize() {
     }
     new_token(TK_EOF, cur, p);
     token = head.next;
+}
+LVar *find_lvar(Token *tok) {
+    for (LVar *var = locals; var; var = var->next)
+        if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+            return var;
+    return NULL;
+}
+int locals_len() {
+    int len = 0;
+    for (LVar *var = locals; var; len++) {
+        var = var->next;
+    }
+    return len;
 }
 
 // parser
@@ -108,12 +141,6 @@ Node *new_node_num(int val) {
     node->val = val;
     return node;
 }
-Node *new_node_ident(Token *tok) {
-    Node *node = calloc(1, sizeof(Node));
-    node->kind = ND_LVAR;
-    node->offset = (tok->str[0] - 'a' + 1) * 8;
-    return node;
-}
 void program() {
     int i = 0;
     while (!at_eof())
@@ -121,7 +148,14 @@ void program() {
     code[i] = NULL;
 }
 Node *stmt() {
-    Node *node = expr();
+    Node *node;
+    if (consume_ret()) {
+        node = calloc(1, sizeof(Node));
+        node->kind = ND_RET;
+        node->lhs = expr();
+    } else {
+        node = expr();
+    }
     expect(";");
     return node;
 }
@@ -200,7 +234,23 @@ Node *term() {
     }
     Token *tok = consume_ident();
     if (tok) {
-        return new_node_ident(tok);
+        Node *node = calloc(1, sizeof(Node));
+        node->kind = ND_LVAR;
+
+        LVar *lvar = find_lvar(tok);
+        if (lvar) {
+            node->offset = lvar->offset;
+        } else {
+            lvar = calloc(1, sizeof(LVar));
+            lvar->next = locals;
+            lvar->name = tok->str;
+            lvar->len = tok->len;
+            if (!locals) lvar->offset = 8; // TODO review
+            else lvar->offset = locals->offset + 8;
+            node->offset = lvar->offset;
+            locals = lvar;
+        }
+        return node;
     }
     return new_node_num(expect_number());
 }
